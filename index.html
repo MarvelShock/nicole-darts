@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TheNicoleT Darts</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="topbar">
+      <div class="title">
+        <span class="title-nicole">TheNicoleT</span>
+        <span class="title-darts"> Darts 🎯</span>
+      </div>
+      <div class="hud">
+        <div class="badge" id="lastResult">Ready to throw!</div>
+        <button class="btn mini" id="togglePanelBtn">Show Customize</button>
+        <button class="btn mini" id="soundBtn">Sound: On</button>
+        <button class="btn throw" id="throwBtn">🎯 Throw Dart!</button>
+      </div>
+    </div>
+    <div class="main">
+      <div class="panel hidden" id="panel">
+        <h2>🎨 Customize Zones</h2>
+        <p>Each ring from center outward maps to a zone. Edit labels and colors freely!</p>
+        <div id="zonesUI"></div>
+        <button class="btn add-zone-btn" id="addZoneBtn">+ Add Zone</button>
+        <div class="footerhint">The dart lands on a random ring — inner rings are rarer and more valuable!</div>
+      </div>
+      <div class="gamewrap">
+        <canvas id="dartCanvas"></canvas>
+        <div id="resultOverlay" class="result-overlay hidden">
+          <div id="resultText" class="result-text">
+            <span class="res-name" id="resName"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
