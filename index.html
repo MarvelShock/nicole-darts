@@ -108,7 +108,7 @@
       border: 1px solid rgba(255,102,184,0.25);
       border-radius: 14px;
       padding: 26px 28px;
-      width: 420px;
+      width: 440px;
       max-width: 95vw;
       box-shadow: 0 20px 60px rgba(0,0,0,0.85);
       color: #e0c8ff;
@@ -116,6 +116,7 @@
       line-height: 1.6;
     }
     .obs-modal h2 { color: #ff66b8; font-size: 1.2rem; margin-bottom: 14px; }
+    .obs-modal h3 { color: #ff66b8; font-size: 0.95rem; margin: 14px 0 6px; }
     .obs-modal ol { padding-left: 18px; margin-bottom: 14px; }
     .obs-modal li { margin-bottom: 7px; }
     .obs-modal .url-box {
@@ -127,8 +128,10 @@
       font-size: 12px;
       color: #ff9cd8;
       word-break: break-all;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
     }
+    .obs-modal .url-label { font-size: 11px; opacity: 0.55; margin-bottom: 4px; }
+    .obs-modal .divider { border: none; border-top: 1px solid rgba(255,102,184,0.15); margin: 14px 0; }
     .obs-modal .tip { font-size: 11px; opacity: 0.6; margin-top: 8px; }
     .obs-modal-close {
       margin-top: 12px;
@@ -144,10 +147,40 @@
       transition: background 0.15s;
     }
     .obs-modal-close:hover { background: rgba(255,102,184,0.22); }
+
+    /* OBS overlay mode */
+    body.obs-mode { background: transparent !important; }
+    body.obs-mode::before { display: none !important; }
+    .obs-mode .topbar { display: none !important; }
+    .obs-mode .panel { display: none !important; }
+    .obs-mode #app { background: transparent; }
+    .obs-mode .obs-title {
+      display: flex !important;
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: .04em;
+      background: linear-gradient(90deg,#ff66b8,#ff9cd8,#5ad0ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 14px rgba(255,102,184,0.55));
+      padding: 8px 16px 4px;
+      font-family: system-ui, sans-serif;
+    }
+    .obs-title { display: none; }
+    .obs-mode .main { padding: 0 !important; }
+    .obs-mode .gamewrap {
+      border: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
   </style>
 </head>
 <body>
   <div id="app">
+    <!-- OBS-only title shown when ?obs=1 -->
+    <div class="obs-title">TheNicoleT Darts 🎯</div>
+
     <div class="topbar">
       <div class="title">
         <span class="title-nicole">TheNicoleT</span>
@@ -195,25 +228,42 @@
   <!-- OBS Setup Modal -->
   <div class="obs-modal-overlay" id="obsModal">
     <div class="obs-modal">
-      <h2>📺 Add as OBS Browser Overlay</h2>
-      <ol>
-        <li>In OBS, click <strong>+</strong> under Sources → choose <strong>Browser</strong></li>
-        <li>Set the URL to:</li>
-      </ol>
+      <h2>📺 OBS Setup — Darts</h2>
+
+      <h3>🎬 Clean OBS Overlay (recommended)</h3>
+      <p class="url-label">Shows only the title + dartboard + result. No controls.</p>
+      <div class="url-box">https://marvelshock.github.io/nicole-darts/?obs=1</div>
+      <p style="font-size:11px;opacity:0.55;">Width: 620 &nbsp;&nbsp; Height: 680</p>
+
+      <hr class="divider">
+
+      <h3>🎬 Full App URL</h3>
+      <p class="url-label">Full game with all controls:</p>
       <div class="url-box">https://marvelshock.github.io/nicole-darts/</div>
-      <ol start="3">
-        <li>Set <strong>Width</strong> to your canvas width (e.g. <strong>1280</strong>)</li>
-        <li>Set <strong>Height</strong> to your canvas height (e.g. <strong>720</strong>)</li>
+      <p style="font-size:11px;opacity:0.55;">Width: 1280 &nbsp;&nbsp; Height: 720</p>
+
+      <ol style="margin-top:12px;">
+        <li>In OBS, click <strong>+</strong> under Sources → choose <strong>Browser</strong></li>
+        <li>Paste your chosen URL above</li>
+        <li>Set Width &amp; Height as noted</li>
         <li>Check <strong>"Shutdown source when not visible"</strong> to save resources</li>
         <li>Click <strong>OK</strong> — position and resize the source as needed</li>
       </ol>
-      <p class="tip">💡 Twitch chat auto-connects when the page loads — no extra setup needed. Only <strong>tyler25</strong> and <strong>thenicolet</strong> can trigger darts via <strong>!dart</strong> in chat.</p>
+      <p class="tip">💡 Twitch chat auto-connects when the page loads. Only <strong>tyler25</strong> and <strong>thenicolet</strong> can trigger darts via <strong>!dart</strong> in chat.</p>
       <button class="obs-modal-close" id="obsModalClose">Done</button>
     </div>
   </div>
 
   <script src="game.js"></script>
   <script>
+    // OBS overlay mode
+    const obsMode = new URLSearchParams(location.search).get('obs') === '1';
+    if (obsMode) {
+      document.body.classList.add('obs-mode');
+      document.documentElement.style.background = 'transparent';
+      document.body.style.background = 'transparent';
+    }
+
     // Game switcher
     const gsBtn = document.getElementById('gameSwitcherBtn');
     const gsMenu = document.getElementById('gameSwitcherMenu');
