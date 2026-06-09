@@ -46,15 +46,15 @@ function playThrow() {
   if (!soundOn) return;
   try {
     const a = getACtx();
-    const buf = a.createBuffer(1, a.sampleRate * 0.25, a.sampleRate);
+    const buf = a.createBuffer(1, a.sampleRate * 0.6, a.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
     const src = a.createBufferSource(); src.buffer = buf;
     const filt = a.createBiquadFilter();
-    filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 0.5;
+    filt.type = 'bandpass'; filt.frequency.value = 900; filt.Q.value = 0.4;
     const g = a.createGain();
-    g.gain.setValueAtTime(0.28, a.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.25);
+    g.gain.setValueAtTime(0.22, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.6);
     src.connect(filt); filt.connect(g); g.connect(a.destination);
     src.start();
   } catch(e){}
@@ -216,20 +216,27 @@ function throwDart() {
   const startX = CX+(Math.random()-0.5)*60, startY=-40;
   const dx=landX-startX, dy=landY-startY;
   const finalAngle = Math.atan2(dy,dx)-Math.PI/2;
-  const totalFrames=32; let frame=0;
+
+  // 90 frames @ ~16ms each = ~1.5 seconds of visible travel
+  const totalFrames = 90;
+  let frame = 0;
 
   function fly() {
     frame++;
-    const et = 1-Math.pow(1-frame/totalFrames,3);
+    // ease-in-out so it starts slow, speeds up mid-flight, slows to a stick
+    const t = frame / totalFrames;
+    const et = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
     drawBoard({x:startX+dx*et, y:startY+dy*et, angle:finalAngle});
-    if (frame>=totalFrames) {
+    if (frame >= totalFrames) {
       dartPos={x:landX,y:landY}; dartAngle=finalAngle;
       if (zones[zoneIdx].isBullseye) lastSubAmount=Math.floor(Math.random()*30)+1;
       playThunk(); drawBoard();
       shakeBoard(5,()=>showResult(zoneIdx));
-    } else requestAnimationFrame(fly);
+    } else {
+      setTimeout(fly, 16);
+    }
   }
-  requestAnimationFrame(fly);
+  setTimeout(fly, 16);
 }
 
 function shakeBoard(n,cb) {
