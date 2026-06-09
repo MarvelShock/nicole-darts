@@ -1,5 +1,5 @@
 const DEFAULT_ZONES = [
-  { label: '🎉 BULLSEYE!',   color: '#ff66b8', weight: 1 },
+  { label: '🎯 BULLSEYE!',   color: '#ff66b8', weight: 1, isBullseye: true },
   { label: '💎 Grand Prize', color: '#c56bff', weight: 2 },
   { label: '🔥 Double Up',   color: '#5ad0ff', weight: 3 },
   { label: '⭐ 500 Points',  color: '#ff9cd8', weight: 4 },
@@ -26,6 +26,7 @@ let throwing  = false;
 let dartPos   = null;
 let dartAngle = 0;
 let soundOn   = true;
+let lastSubAmount = null; // stores the sub count when bullseye is hit
 
 const throwBtn      = document.getElementById('throwBtn');
 const soundBtn      = document.getElementById('soundBtn');
@@ -37,6 +38,7 @@ const lastResult    = document.getElementById('lastResult');
 const resultOverlay = document.getElementById('resultOverlay');
 const resName       = document.getElementById('resName');
 
+// ── Audio ──────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let actx = null;
 function getACtx() { if (!actx) actx = new AudioCtx(); return actx; }
@@ -74,21 +76,28 @@ function playThunk() {
   } catch(e){}
 }
 
-function playWin() {
+function playWin(isBullseye) {
   if (!soundOn) return;
   try {
     const a = getACtx();
-    [0, 0.1, 0.2, 0.35].forEach((t, i) => {
+    const notes = isBullseye
+      ? [523, 659, 784, 1047, 1319, 1568] // longer fanfare for bullseye
+      : [523, 659, 784, 1047];
+    const times = isBullseye
+      ? [0, 0.09, 0.18, 0.3, 0.42, 0.56]
+      : [0, 0.1, 0.2, 0.35];
+    notes.forEach((freq, i) => {
       const o = a.createOscillator(); const g = a.createGain();
       o.connect(g); g.connect(a.destination);
-      o.frequency.value = [523, 659, 784, 1047][i]; o.type = 'sine';
-      g.gain.setValueAtTime(0.2, a.currentTime + t);
-      g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + t + 0.3);
-      o.start(a.currentTime + t); o.stop(a.currentTime + t + 0.3);
+      o.frequency.value = freq; o.type = 'sine';
+      g.gain.setValueAtTime(0.22, a.currentTime + times[i]);
+      g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + times[i] + 0.35);
+      o.start(a.currentTime + times[i]); o.stop(a.currentTime + times[i] + 0.35);
     });
   } catch(e){}
 }
 
+// ── Draw Board ─────────────────────────────────────────────────
 function getRingRadii(i) {
   const W = canvas.width;
   const maxR = W / 2 - 12;
@@ -144,6 +153,7 @@ function drawBoard(flyDart) {
     }
   }
 
+  // Labels
   for (let i = 0; i < n; i++) {
     const { inner, outer } = getRingRadii(i);
     const midR = (inner + outer) / 2;
@@ -157,13 +167,27 @@ function drawBoard(flyDart) {
     ctx.shadowColor = 'rgba(0,0,0,0.95)';
     ctx.shadowBlur = 6;
     if (i === 0) {
-      ctx.fillText(zones[i].label, CX, CY, outer * 1.8);
+      // Bullseye: show label + sub amount if landed
+      const bullR = outer;
+      if (lastSubAmount !== null) {
+        // show sub count big
+        ctx.font = `bold ${Math.max(11, Math.min(20, bullR * 0.38))}px system-ui, sans-serif`;
+        ctx.fillText(zones[0].label, CX, CY - bullR * 0.22, bullR * 1.8);
+        ctx.font = `bold ${Math.max(14, Math.min(26, bullR * 0.52))}px system-ui, sans-serif`;
+        ctx.fillStyle = '#fff700';
+        ctx.shadowColor = 'rgba(0,0,0,1)';
+        ctx.shadowBlur = 10;
+        ctx.fillText(`${lastSubAmount} SUBS`, CX, CY + bullR * 0.22, bullR * 1.8);
+      } else {
+        ctx.fillText(zones[0].label, CX, CY, bullR * 1.8);
+      }
     } else {
       ctx.fillText(zones[i].label, CX, CY - midR, ringH * 2.2);
     }
     ctx.restore();
   }
 
+  // Outer glow
   const og = ctx.createRadialGradient(CX, CY, maxR - 2, CX, CY, maxR + 10);
   og.addColorStop(0, 'rgba(255,102,184,0.8)');
   og.addColorStop(1, 'rgba(90,208,255,0)');
@@ -209,6 +233,7 @@ function drawDart(x, y, angle) {
   ctx.restore();
 }
 
+// ── Throw ──────────────────────────────────────────────────────
 function pickLandingZone() {
   const total = zones.reduce((s, z) => s + z.weight, 0);
   let r = Math.random() * total;
@@ -222,6 +247,7 @@ function throwDart() {
   throwBtn.disabled = true;
   resultOverlay.classList.add('hidden');
   dartPos = null;
+  lastSubAmount = null;
   playThrow();
 
   const W  = canvas.width;
@@ -253,6 +279,10 @@ function throwDart() {
     if (frame >= totalFrames) {
       dartPos   = { x: landX, y: landY };
       dartAngle = finalAngle;
+      // If bullseye, pick sub amount now so it shows on the board
+      if (zones[zoneIdx].isBullseye) {
+        lastSubAmount = Math.floor(Math.random() * 30) + 1;
+      }
       playThunk();
       drawBoard();
       shakeBoard(5, () => showResult(zoneIdx));
@@ -272,21 +302,33 @@ function shakeBoard(n, cb) {
 
 function showResult(zoneIdx) {
   const zone = zones[zoneIdx];
-  resName.textContent    = zone.label;
-  lastResult.textContent = zone.label;
+  const isBullseye = !!zone.isBullseye;
+  let displayText = zone.label;
+  if (isBullseye && lastSubAmount !== null) {
+    displayText = `${zone.label}\n🎊 ${lastSubAmount} SUBS!`;
+    resName.innerHTML = `${zone.label}<br><span style="font-size:2.2em;color:#fff700;text-shadow:0 0 18px #ff66b8,0 0 4px #000;">🎊 ${lastSubAmount} SUBS!</span>`;
+  } else {
+    resName.textContent = displayText;
+  }
+  lastResult.textContent = isBullseye && lastSubAmount !== null ? `${zone.label} — ${lastSubAmount} Subs!` : zone.label;
   resultOverlay.classList.remove('hidden');
-  playWin();
+  playWin(isBullseye);
   throwing = false;
   throwBtn.disabled = false;
-  setTimeout(() => resultOverlay.classList.add('hidden'), 3500);
+  setTimeout(() => {
+    resultOverlay.classList.add('hidden');
+    lastSubAmount = null;
+    drawBoard();
+  }, 4500);
 }
 
+// ── Panel UI ───────────────────────────────────────────────────
 function renderZonesUI() {
   zonesUI.innerHTML = '';
   zones.forEach((z, i) => {
     const lbl = document.createElement('div');
     lbl.className = 'ring-label';
-    lbl.textContent = i === 0 ? '🎯 Bullseye (center)' : `Ring ${i + 1} (from center)`;
+    lbl.textContent = i === 0 ? '🎯 Bullseye — random 1–30 subs!' : `Ring ${i + 1} (from center)`;
     const row = document.createElement('div'); row.className = 'zone-row';
     const inp = document.createElement('input'); inp.type = 'text'; inp.value = z.label; inp.placeholder = 'Zone label';
     inp.addEventListener('input', () => { zones[i].label = inp.value; drawBoard(); });
@@ -315,7 +357,11 @@ soundBtn.addEventListener('click', () => {
   soundOn = !soundOn;
   soundBtn.textContent = 'Sound: ' + (soundOn ? 'On' : 'Off');
 });
-resultOverlay.addEventListener('click', () => resultOverlay.classList.add('hidden'));
+resultOverlay.addEventListener('click', () => {
+  resultOverlay.classList.add('hidden');
+  lastSubAmount = null;
+  drawBoard();
+});
 
 renderZonesUI();
 drawBoard();
