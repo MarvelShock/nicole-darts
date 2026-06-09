@@ -5,6 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TheNicoleT Darts</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    .game-switcher { position: relative; display: inline-block; }
+    .game-switcher-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      padding: 5px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .game-switcher-btn:hover { background: rgba(255,255,255,0.15); }
+    .game-switcher-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      background: #12082a;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 9px;
+      overflow: hidden;
+      z-index: 999;
+      min-width: 180px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .game-switcher-menu.open { display: block; }
+    .game-switcher-menu a {
+      display: block;
+      padding: 10px 16px;
+      color: #e0c8ff;
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    .game-switcher-menu a:hover { background: rgba(255,255,255,0.1); }
+    .game-switcher-menu a.active { color: #ff66b8; font-weight: bold; }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -18,6 +59,14 @@
         <button class="btn mini" id="togglePanelBtn">Show Customize</button>
         <button class="btn mini" id="soundBtn">Sound: On</button>
         <button class="btn throw" id="throwBtn">🎯 Throw Dart!</button>
+        <div class="game-switcher" id="gameSwitcher">
+          <button class="game-switcher-btn" id="gameSwitcherBtn">🎮 Switch Game ▾</button>
+          <div class="game-switcher-menu" id="gameSwitcherMenu">
+            <a href="https://marvelshock.github.io/oinkcannon/">🐷 Oink Cannon</a>
+            <a href="https://marvelshock.github.io/nicole-darts/" class="active">🎯 Darts</a>
+            <a href="https://marvelshock.github.io/plinko-overlay/">🔵 Plinko</a>
+          </div>
+        </div>
       </div>
     </div>
     <div class="main">
@@ -33,10 +82,6 @@
           <div class="twitch-status" id="twitchStatus">🔴 Not connected</div>
           <button class="btn twitch-connect-btn" id="twitchConnectBtn">Connect to Twitch</button>
           <button class="btn twitch-disconnect-btn hidden" id="twitchDisconnectBtn">Disconnect</button>
-          <div class="twitch-field">
-            <label>Channel</label>
-            <input type="text" id="twitchChannel" placeholder="e.g. nicolet" value="nicolet" />
-          </div>
           <div class="twitch-field">
             <label>Trigger word</label>
             <input type="text" id="twitchTrigger" placeholder="e.g. !dart" value="!dart" />
@@ -60,5 +105,15 @@
     </div>
   </div>
   <script src="game.js"></script>
+  <script>
+    // Game switcher toggle
+    const gsBtn = document.getElementById('gameSwitcherBtn');
+    const gsMenu = document.getElementById('gameSwitcherMenu');
+    gsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gsMenu.classList.toggle('open');
+    });
+    document.addEventListener('click', () => gsMenu.classList.remove('open'));
+  </script>
 </body>
 </html>

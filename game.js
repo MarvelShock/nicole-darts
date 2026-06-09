@@ -1,6 +1,3 @@
-const CLIENT_ID = 'f6q91oc8nmrz0a15413wbjuezzyr2v';
-const REDIRECT_URI = 'https://marvelshock.github.io';
-
 const DEFAULT_ZONES = [
   { label: '🎯 BULLSEYE! 1–30 Subs', color: '#ff66b8', weight: 1, isBullseye: true },
   { label: '🎉 20 Subs',  color: '#c56bff', weight: 2, subs: 20 },
@@ -31,10 +28,11 @@ let dartAngle     = 0;
 let soundOn       = true;
 let lastSubAmount = null;
 
-// Twitch IRC state
-let twitchWs        = null;
-let twitchToken     = null;
-let cooldownUntil   = 0;
+// Twitch IRC state — anonymous, no OAuth needed
+const TWITCH_CHANNEL = 'thenicolet';
+let twitchWs     = null;
+let twitchPing   = null;
+let cooldownUntil = 0;
 
 const throwBtn       = document.getElementById('throwBtn');
 const soundBtn       = document.getElementById('soundBtn');
@@ -49,55 +47,38 @@ const chatThrower    = document.getElementById('chatThrower');
 const twitchStatus   = document.getElementById('twitchStatus');
 const twitchConnectBtn    = document.getElementById('twitchConnectBtn');
 const twitchDisconnectBtn = document.getElementById('twitchDisconnectBtn');
-const twitchChannelInput  = document.getElementById('twitchChannel');
 const twitchTriggerInput  = document.getElementById('twitchTrigger');
 const twitchCooldownInput = document.getElementById('twitchCooldown');
 
-// ── OAuth token from URL hash (after Twitch redirect) ──────────────────────
-(function grabToken() {
-  const hash = window.location.hash;
-  if (!hash) return;
-  const params = new URLSearchParams(hash.replace('#','?'));
-  const t = params.get('access_token');
-  if (t) {
-    twitchToken = t;
-    window.history.replaceState(null, '', window.location.pathname);
-  }
-})();
-
-// ── Twitch IRC over WebSocket ───────────────────────────────────────────────
+// ── Anonymous Twitch IRC ───────────────────────────────────────────────
 function connectTwitch() {
-  const channel = twitchChannelInput.value.trim().toLowerCase();
-  if (!twitchToken) {
-    // Redirect to Twitch OAuth
-    const url = `https://id.twitch.tv/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=chat%3Aread`;
-    window.location.href = url;
-    return;
-  }
-  if (twitchWs) twitchWs.close();
+  if (twitchWs && twitchWs.readyState < 2) return;
   setTwitchStatus('connecting');
-
   twitchWs = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
 
   twitchWs.onopen = () => {
-    twitchWs.send('CAP REQ :twitch.tv/tags');
-    twitchWs.send(`PASS oauth:${twitchToken}`);
-    twitchWs.send(`NICK justinfan${Math.floor(Math.random()*99999)}`);
-    twitchWs.send(`JOIN #${channel}`);
+    twitchWs.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+    twitchWs.send('PASS SCHMOOPIIE');
+    twitchWs.send('NICK justinfan' + Math.floor(Math.random() * 99999));
+    twitchWs.send('JOIN #' + TWITCH_CHANNEL);
+    twitchPing = setInterval(() => {
+      if (twitchWs && twitchWs.readyState === 1) twitchWs.send('PING :tmi.twitch.tv');
+    }, 4 * 60 * 1000);
   };
 
   twitchWs.onmessage = (e) => {
     const raw = e.data;
     if (raw.includes('PING')) { twitchWs.send('PONG :tmi.twitch.tv'); return; }
-    if (raw.includes('376') || raw.includes('001')) setTwitchStatus('connected');
-
-    // Parse PRIVMSG
-    const privmsg = raw.match(/^(?:@[^ ]+ )?:([^!]+)![^ ]+ PRIVMSG #\S+ :(.+)$/);
-    if (!privmsg) return;
-    const username = privmsg[1];
-    const message  = privmsg[2].trim();
-    const trigger  = (twitchTriggerInput.value.trim() || '!dart').toLowerCase();
-    if (message.toLowerCase() === trigger) {
+    if (raw.includes('366') || raw.includes('JOIN #' + TWITCH_CHANNEL)) {
+      setTwitchStatus('connected');
+    }
+    const privMsg = raw.match(/PRIVMSG #\S+ :(.+)/);
+    if (!privMsg) return;
+    const message = privMsg[1].trim();
+    const userMatch = raw.match(/display-name=([^;]+)/);
+    const username = userMatch ? userMatch[1] : 'viewer';
+    const trigger = (twitchTriggerInput.value.trim() || '!dart').toLowerCase();
+    if (message.toLowerCase() === trigger || message.toLowerCase().startsWith(trigger + ' ')) {
       const cooldown = parseInt(twitchCooldownInput.value) || 0;
       const now = Date.now();
       if (now < cooldownUntil) return;
@@ -108,24 +89,25 @@ function connectTwitch() {
   };
 
   twitchWs.onerror = () => setTwitchStatus('error');
-  twitchWs.onclose = () => setTwitchStatus('disconnected');
+  twitchWs.onclose = () => { clearInterval(twitchPing); setTwitchStatus('disconnected'); };
 }
 
 function disconnectTwitch() {
   if (twitchWs) { twitchWs.close(); twitchWs = null; }
+  clearInterval(twitchPing);
   setTwitchStatus('disconnected');
 }
 
 function setTwitchStatus(state) {
   const labels = {
     disconnected: '🔴 Not connected',
-    connecting:   '🟡 Connecting…',
-    connected:    '🟢 Connected to chat!',
+    connecting:   '🟡 Connecting to #' + TWITCH_CHANNEL + '…',
+    connected:    '🟢 Live in #' + TWITCH_CHANNEL + '!',
     error:        '🔴 Connection error'
   };
   twitchStatus.textContent = labels[state] || state;
   twitchStatus.className = 'twitch-status' + (state === 'connected' ? ' connected' : '');
-  twitchConnectBtn.classList.toggle('hidden', state === 'connected');
+  twitchConnectBtn.classList.toggle('hidden', state === 'connected' || state === 'connecting');
   twitchDisconnectBtn.classList.toggle('hidden', state !== 'connected');
 }
 
@@ -138,10 +120,7 @@ function showChatThrower(username) {
 twitchConnectBtn.addEventListener('click', connectTwitch);
 twitchDisconnectBtn.addEventListener('click', disconnectTwitch);
 
-// If token came back from OAuth redirect, auto-connect
-if (twitchToken) setTimeout(connectTwitch, 500);
-
-// ── Audio ───────────────────────────────────────────────────────────────────
+// ── Audio ───────────────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let actx = null;
 function getACtx() { if (!actx) actx = new AudioCtx(); return actx; }
@@ -196,7 +175,7 @@ function playWin(isBullseye) {
   } catch(e){}
 }
 
-// ── Board drawing ───────────────────────────────────────────────────────────
+// ── Board drawing ──────────────────────────────────────────────────────
 function getRingRadii(i) {
   const maxR = canvas.width / 2 - 12;
   const n = zones.length;
@@ -403,7 +382,7 @@ addZoneBtn.addEventListener('click',()=>{
   zonesUI.lastElementChild?.querySelector('input')?.focus();
 });
 
-throwBtn.addEventListener('click',throwDart);
+throwBtn.addEventListener('click', () => { getACtx(); throwDart(); });
 toggleBtn.addEventListener('click',()=>{
   const hidden=panel.classList.toggle('hidden');
   toggleBtn.textContent=hidden?'Show Customize':'Hide Customize';
