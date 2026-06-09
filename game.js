@@ -28,8 +28,10 @@ let dartAngle     = 0;
 let soundOn       = true;
 let lastSubAmount = null;
 
-// Twitch IRC state — anonymous, no OAuth needed
-const TWITCH_CHANNEL = 'thenicolet';
+// Twitch IRC state
+const TWITCH_CHANNEL  = 'thenicolet';
+const ALLOWED_USERS   = ['tyler25', 'thenicolet']; // case-insensitive
+const TWITCH_TRIGGER  = '!dart';
 let twitchWs     = null;
 let twitchPing   = null;
 let cooldownUntil = 0;
@@ -44,16 +46,27 @@ const lastResult     = document.getElementById('lastResult');
 const resultOverlay  = document.getElementById('resultOverlay');
 const resName        = document.getElementById('resName');
 const chatThrower    = document.getElementById('chatThrower');
-const twitchStatus   = document.getElementById('twitchStatus');
-const twitchConnectBtn    = document.getElementById('twitchConnectBtn');
-const twitchDisconnectBtn = document.getElementById('twitchDisconnectBtn');
-const twitchTriggerInput  = document.getElementById('twitchTrigger');
-const twitchCooldownInput = document.getElementById('twitchCooldown');
+const twitchPill     = document.getElementById('twitchPill');
 
-// ── Anonymous Twitch IRC ───────────────────────────────────────────────
+// ── Twitch pill helpers ─────────────────────────────────────────
+function setPillConnected() {
+  twitchPill.className = 'twitch-pill connected';
+  twitchPill.innerHTML = '🟢 Live in #' + TWITCH_CHANNEL + ' &mdash; !dart to throw <button id="twDisBtn" title="Disconnect">✕</button>';
+  document.getElementById('twDisBtn').onclick = disconnectTwitch;
+}
+function setPillConnecting() {
+  twitchPill.className = 'twitch-pill';
+  twitchPill.textContent = '🟡 Connecting...';
+}
+function setPillDisconnected() {
+  twitchPill.className = 'twitch-pill';
+  twitchPill.textContent = '🔴 Disconnected';
+}
+
+// ── Anonymous Twitch IRC ───────────────────────────────────────
 function connectTwitch() {
   if (twitchWs && twitchWs.readyState < 2) return;
-  setTwitchStatus('connecting');
+  setPillConnecting();
   twitchWs = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
 
   twitchWs.onopen = () => {
@@ -69,46 +82,33 @@ function connectTwitch() {
   twitchWs.onmessage = (e) => {
     const raw = e.data;
     if (raw.includes('PING')) { twitchWs.send('PONG :tmi.twitch.tv'); return; }
-    if (raw.includes('366') || raw.includes('JOIN #' + TWITCH_CHANNEL)) {
-      setTwitchStatus('connected');
-    }
+    if (raw.includes('366')) setPillConnected();
     const privMsg = raw.match(/PRIVMSG #\S+ :(.+)/);
     if (!privMsg) return;
-    const message = privMsg[1].trim();
+    const message = privMsg[1].trim().toLowerCase();
     const userMatch = raw.match(/display-name=([^;]+)/);
-    const username = userMatch ? userMatch[1] : 'viewer';
-    const trigger = (twitchTriggerInput.value.trim() || '!dart').toLowerCase();
-    if (message.toLowerCase() === trigger || message.toLowerCase().startsWith(trigger + ' ')) {
-      const cooldown = parseInt(twitchCooldownInput.value) || 0;
+    const username = userMatch ? userMatch[1].trim() : '';
+    // Allowlist check
+    if (!ALLOWED_USERS.includes(username.toLowerCase())) return;
+    if (message === TWITCH_TRIGGER || message.startsWith(TWITCH_TRIGGER + ' ')) {
       const now = Date.now();
       if (now < cooldownUntil) return;
-      cooldownUntil = now + cooldown * 1000;
+      cooldownUntil = now + 10000; // 10s cooldown
       showChatThrower(username);
       throwDart();
     }
   };
 
-  twitchWs.onerror = () => setTwitchStatus('error');
-  twitchWs.onclose = () => { clearInterval(twitchPing); setTwitchStatus('disconnected'); };
+  twitchWs.onerror = () => {};
+  twitchWs.onclose = () => {
+    clearInterval(twitchPing);
+    setPillDisconnected();
+    setTimeout(connectTwitch, 8000); // auto-reconnect
+  };
 }
 
 function disconnectTwitch() {
-  if (twitchWs) { twitchWs.close(); twitchWs = null; }
-  clearInterval(twitchPing);
-  setTwitchStatus('disconnected');
-}
-
-function setTwitchStatus(state) {
-  const labels = {
-    disconnected: '🔴 Not connected',
-    connecting:   '🟡 Connecting to #' + TWITCH_CHANNEL + '…',
-    connected:    '🟢 Live in #' + TWITCH_CHANNEL + '!',
-    error:        '🔴 Connection error'
-  };
-  twitchStatus.textContent = labels[state] || state;
-  twitchStatus.className = 'twitch-status' + (state === 'connected' ? ' connected' : '');
-  twitchConnectBtn.classList.toggle('hidden', state === 'connected' || state === 'connecting');
-  twitchDisconnectBtn.classList.toggle('hidden', state !== 'connected');
+  if (twitchWs) { twitchWs.onclose = () => { clearInterval(twitchPing); setPillDisconnected(); }; twitchWs.close(); twitchWs = null; }
 }
 
 function showChatThrower(username) {
@@ -117,10 +117,10 @@ function showChatThrower(username) {
   setTimeout(() => chatThrower.classList.add('hidden'), 4000);
 }
 
-twitchConnectBtn.addEventListener('click', connectTwitch);
-twitchDisconnectBtn.addEventListener('click', disconnectTwitch);
+// Auto-connect on page load
+connectTwitch();
 
-// ── Audio ───────────────────────────────────────────────────────────────
+// ── Audio ────────────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let actx = null;
 function getACtx() { if (!actx) actx = new AudioCtx(); return actx; }

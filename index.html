@@ -45,6 +45,105 @@
     }
     .game-switcher-menu a:hover { background: rgba(255,255,255,0.1); }
     .game-switcher-menu a.active { color: #ff66b8; font-weight: bold; }
+
+    /* Twitch status pill */
+    .twitch-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 20px;
+      padding: 3px 10px;
+      color: rgba(255,255,255,0.55);
+      white-space: nowrap;
+      transition: border-color 0.3s, background 0.3s, color 0.3s;
+    }
+    .twitch-pill.connected {
+      color: #4ade80;
+      border-color: rgba(74,222,128,0.35);
+      background: rgba(74,222,128,0.07);
+    }
+    .twitch-pill button {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 10px;
+      opacity: 0.65;
+      padding: 0;
+      margin-left: 2px;
+      line-height: 1;
+    }
+    .twitch-pill button:hover { opacity: 1; }
+
+    /* OBS button */
+    .obs-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.7);
+      padding: 4px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .obs-btn:hover { background: rgba(255,255,255,0.13); color:#fff; }
+
+    /* OBS modal */
+    .obs-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.72);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .obs-modal-overlay.open { display: flex; }
+    .obs-modal {
+      background: #120824;
+      border: 1px solid rgba(255,102,184,0.25);
+      border-radius: 14px;
+      padding: 26px 28px;
+      width: 420px;
+      max-width: 95vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+      color: #e0c8ff;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .obs-modal h2 { color: #ff66b8; font-size: 1.2rem; margin-bottom: 14px; }
+    .obs-modal ol { padding-left: 18px; margin-bottom: 14px; }
+    .obs-modal li { margin-bottom: 7px; }
+    .obs-modal .url-box {
+      background: #080416;
+      border: 1px solid rgba(255,102,184,0.2);
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #ff9cd8;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+    .obs-modal .tip { font-size: 11px; opacity: 0.6; margin-top: 8px; }
+    .obs-modal-close {
+      margin-top: 12px;
+      width: 100%;
+      padding: 8px;
+      background: rgba(255,102,184,0.12);
+      border: 1px solid rgba(255,102,184,0.3);
+      border-radius: 7px;
+      color: #ff66b8;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .obs-modal-close:hover { background: rgba(255,102,184,0.22); }
   </style>
 </head>
 <body>
@@ -56,6 +155,9 @@
       </div>
       <div class="hud">
         <div class="badge" id="lastResult">Ready to throw!</div>
+        <!-- Twitch status pill -->
+        <div class="twitch-pill" id="twitchPill">🟡 Connecting...</div>
+        <button class="obs-btn" id="obsBtn">📺 OBS Setup</button>
         <button class="btn mini" id="togglePanelBtn">Show Customize</button>
         <button class="btn mini" id="soundBtn">Sound: On</button>
         <button class="btn throw" id="throwBtn">🎯 Throw Dart!</button>
@@ -69,6 +171,7 @@
         </div>
       </div>
     </div>
+
     <div class="main">
       <div class="panel hidden" id="panel">
         <h2>🎨 Customize Zones</h2>
@@ -76,22 +179,6 @@
         <div id="zonesUI"></div>
         <button class="btn add-zone-btn" id="addZoneBtn">+ Add Zone</button>
         <div class="footerhint">The dart lands on a random ring — inner rings are rarer and more valuable!</div>
-
-        <div class="twitch-section">
-          <h2>💬 Twitch Chat Trigger</h2>
-          <div class="twitch-status" id="twitchStatus">🔴 Not connected</div>
-          <button class="btn twitch-connect-btn" id="twitchConnectBtn">Connect to Twitch</button>
-          <button class="btn twitch-disconnect-btn hidden" id="twitchDisconnectBtn">Disconnect</button>
-          <div class="twitch-field">
-            <label>Trigger word</label>
-            <input type="text" id="twitchTrigger" placeholder="e.g. !dart" value="!dart" />
-          </div>
-          <div class="twitch-field">
-            <label>Cooldown (seconds)</label>
-            <input type="number" id="twitchCooldown" min="0" max="300" value="10" style="width:70px" />
-          </div>
-          <div class="footerhint">Viewers type the trigger word in chat to throw a dart!</div>
-        </div>
       </div>
       <div class="gamewrap">
         <canvas id="dartCanvas"></canvas>
@@ -104,16 +191,39 @@
       </div>
     </div>
   </div>
+
+  <!-- OBS Setup Modal -->
+  <div class="obs-modal-overlay" id="obsModal">
+    <div class="obs-modal">
+      <h2>📺 Add as OBS Browser Overlay</h2>
+      <ol>
+        <li>In OBS, click <strong>+</strong> under Sources → choose <strong>Browser</strong></li>
+        <li>Set the URL to:</li>
+      </ol>
+      <div class="url-box">https://marvelshock.github.io/nicole-darts/</div>
+      <ol start="3">
+        <li>Set <strong>Width</strong> to your canvas width (e.g. <strong>1280</strong>)</li>
+        <li>Set <strong>Height</strong> to your canvas height (e.g. <strong>720</strong>)</li>
+        <li>Check <strong>"Shutdown source when not visible"</strong> to save resources</li>
+        <li>Click <strong>OK</strong> — position and resize the source as needed</li>
+      </ol>
+      <p class="tip">💡 Twitch chat auto-connects when the page loads — no extra setup needed. Only <strong>tyler25</strong> and <strong>thenicolet</strong> can trigger darts via <strong>!dart</strong> in chat.</p>
+      <button class="obs-modal-close" id="obsModalClose">Done</button>
+    </div>
+  </div>
+
   <script src="game.js"></script>
   <script>
-    // Game switcher toggle
+    // Game switcher
     const gsBtn = document.getElementById('gameSwitcherBtn');
     const gsMenu = document.getElementById('gameSwitcherMenu');
-    gsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      gsMenu.classList.toggle('open');
-    });
+    gsBtn.addEventListener('click', (e) => { e.stopPropagation(); gsMenu.classList.toggle('open'); });
     document.addEventListener('click', () => gsMenu.classList.remove('open'));
+
+    // OBS modal
+    document.getElementById('obsBtn').addEventListener('click', () => document.getElementById('obsModal').classList.add('open'));
+    document.getElementById('obsModalClose').addEventListener('click', () => document.getElementById('obsModal').classList.remove('open'));
+    document.getElementById('obsModal').addEventListener('click', (e) => { if (e.target === document.getElementById('obsModal')) document.getElementById('obsModal').classList.remove('open'); });
   </script>
 </body>
 </html>
