@@ -1,3 +1,6 @@
+const CLIENT_ID = 'f6q91oc8nmrz0a15413wbjuezzyr2v';
+const REDIRECT_URI = 'https://marvelshock.github.io';
+
 const DEFAULT_ZONES = [
   { label: '🎯 BULLSEYE! 1–30 Subs', color: '#ff66b8', weight: 1, isBullseye: true },
   { label: '🎉 20 Subs',  color: '#c56bff', weight: 2, subs: 20 },
@@ -22,22 +25,123 @@ function sizeCanvas() {
 sizeCanvas();
 window.addEventListener('resize', () => { sizeCanvas(); drawBoard(); });
 
-let throwing     = false;
-let dartPos      = null;
-let dartAngle    = 0;
-let soundOn      = true;
+let throwing      = false;
+let dartPos       = null;
+let dartAngle     = 0;
+let soundOn       = true;
 let lastSubAmount = null;
 
-const throwBtn      = document.getElementById('throwBtn');
-const soundBtn      = document.getElementById('soundBtn');
-const toggleBtn     = document.getElementById('togglePanelBtn');
-const panel         = document.getElementById('panel');
-const zonesUI       = document.getElementById('zonesUI');
-const addZoneBtn    = document.getElementById('addZoneBtn');
-const lastResult    = document.getElementById('lastResult');
-const resultOverlay = document.getElementById('resultOverlay');
-const resName       = document.getElementById('resName');
+// Twitch IRC state
+let twitchWs        = null;
+let twitchToken     = null;
+let cooldownUntil   = 0;
 
+const throwBtn       = document.getElementById('throwBtn');
+const soundBtn       = document.getElementById('soundBtn');
+const toggleBtn      = document.getElementById('togglePanelBtn');
+const panel          = document.getElementById('panel');
+const zonesUI        = document.getElementById('zonesUI');
+const addZoneBtn     = document.getElementById('addZoneBtn');
+const lastResult     = document.getElementById('lastResult');
+const resultOverlay  = document.getElementById('resultOverlay');
+const resName        = document.getElementById('resName');
+const chatThrower    = document.getElementById('chatThrower');
+const twitchStatus   = document.getElementById('twitchStatus');
+const twitchConnectBtn    = document.getElementById('twitchConnectBtn');
+const twitchDisconnectBtn = document.getElementById('twitchDisconnectBtn');
+const twitchChannelInput  = document.getElementById('twitchChannel');
+const twitchTriggerInput  = document.getElementById('twitchTrigger');
+const twitchCooldownInput = document.getElementById('twitchCooldown');
+
+// ── OAuth token from URL hash (after Twitch redirect) ──────────────────────
+(function grabToken() {
+  const hash = window.location.hash;
+  if (!hash) return;
+  const params = new URLSearchParams(hash.replace('#','?'));
+  const t = params.get('access_token');
+  if (t) {
+    twitchToken = t;
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+})();
+
+// ── Twitch IRC over WebSocket ───────────────────────────────────────────────
+function connectTwitch() {
+  const channel = twitchChannelInput.value.trim().toLowerCase();
+  if (!twitchToken) {
+    // Redirect to Twitch OAuth
+    const url = `https://id.twitch.tv/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=chat%3Aread`;
+    window.location.href = url;
+    return;
+  }
+  if (twitchWs) twitchWs.close();
+  setTwitchStatus('connecting');
+
+  twitchWs = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+
+  twitchWs.onopen = () => {
+    twitchWs.send('CAP REQ :twitch.tv/tags');
+    twitchWs.send(`PASS oauth:${twitchToken}`);
+    twitchWs.send(`NICK justinfan${Math.floor(Math.random()*99999)}`);
+    twitchWs.send(`JOIN #${channel}`);
+  };
+
+  twitchWs.onmessage = (e) => {
+    const raw = e.data;
+    if (raw.includes('PING')) { twitchWs.send('PONG :tmi.twitch.tv'); return; }
+    if (raw.includes('376') || raw.includes('001')) setTwitchStatus('connected');
+
+    // Parse PRIVMSG
+    const privmsg = raw.match(/^(?:@[^ ]+ )?:([^!]+)![^ ]+ PRIVMSG #\S+ :(.+)$/);
+    if (!privmsg) return;
+    const username = privmsg[1];
+    const message  = privmsg[2].trim();
+    const trigger  = (twitchTriggerInput.value.trim() || '!dart').toLowerCase();
+    if (message.toLowerCase() === trigger) {
+      const cooldown = parseInt(twitchCooldownInput.value) || 0;
+      const now = Date.now();
+      if (now < cooldownUntil) return;
+      cooldownUntil = now + cooldown * 1000;
+      showChatThrower(username);
+      throwDart();
+    }
+  };
+
+  twitchWs.onerror = () => setTwitchStatus('error');
+  twitchWs.onclose = () => setTwitchStatus('disconnected');
+}
+
+function disconnectTwitch() {
+  if (twitchWs) { twitchWs.close(); twitchWs = null; }
+  setTwitchStatus('disconnected');
+}
+
+function setTwitchStatus(state) {
+  const labels = {
+    disconnected: '🔴 Not connected',
+    connecting:   '🟡 Connecting…',
+    connected:    '🟢 Connected to chat!',
+    error:        '🔴 Connection error'
+  };
+  twitchStatus.textContent = labels[state] || state;
+  twitchStatus.className = 'twitch-status' + (state === 'connected' ? ' connected' : '');
+  twitchConnectBtn.classList.toggle('hidden', state === 'connected');
+  twitchDisconnectBtn.classList.toggle('hidden', state !== 'connected');
+}
+
+function showChatThrower(username) {
+  chatThrower.textContent = `🎯 Thrown by @${username}!`;
+  chatThrower.classList.remove('hidden');
+  setTimeout(() => chatThrower.classList.add('hidden'), 4000);
+}
+
+twitchConnectBtn.addEventListener('click', connectTwitch);
+twitchDisconnectBtn.addEventListener('click', disconnectTwitch);
+
+// If token came back from OAuth redirect, auto-connect
+if (twitchToken) setTimeout(connectTwitch, 500);
+
+// ── Audio ───────────────────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let actx = null;
 function getACtx() { if (!actx) actx = new AudioCtx(); return actx; }
@@ -92,6 +196,7 @@ function playWin(isBullseye) {
   } catch(e){}
 }
 
+// ── Board drawing ───────────────────────────────────────────────────────────
 function getRingRadii(i) {
   const maxR = canvas.width / 2 - 12;
   const n = zones.length;
@@ -217,13 +322,11 @@ function throwDart() {
   const dx=landX-startX, dy=landY-startY;
   const finalAngle = Math.atan2(dy,dx)-Math.PI/2;
 
-  // 90 frames @ ~16ms each = ~1.5 seconds of visible travel
   const totalFrames = 90;
   let frame = 0;
 
   function fly() {
     frame++;
-    // ease-in-out so it starts slow, speeds up mid-flight, slows to a stick
     const t = frame / totalFrames;
     const et = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
     drawBoard({x:startX+dx*et, y:startY+dy*et, angle:finalAngle});

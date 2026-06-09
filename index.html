@@ -27,6 +27,26 @@
         <div id="zonesUI"></div>
         <button class="btn add-zone-btn" id="addZoneBtn">+ Add Zone</button>
         <div class="footerhint">The dart lands on a random ring — inner rings are rarer and more valuable!</div>
+
+        <div class="twitch-section">
+          <h2>💬 Twitch Chat Trigger</h2>
+          <div class="twitch-status" id="twitchStatus">🔴 Not connected</div>
+          <button class="btn twitch-connect-btn" id="twitchConnectBtn">Connect to Twitch</button>
+          <button class="btn twitch-disconnect-btn hidden" id="twitchDisconnectBtn">Disconnect</button>
+          <div class="twitch-field">
+            <label>Channel</label>
+            <input type="text" id="twitchChannel" placeholder="e.g. nicolet" value="nicolet" />
+          </div>
+          <div class="twitch-field">
+            <label>Trigger word</label>
+            <input type="text" id="twitchTrigger" placeholder="e.g. !dart" value="!dart" />
+          </div>
+          <div class="twitch-field">
+            <label>Cooldown (seconds)</label>
+            <input type="number" id="twitchCooldown" min="0" max="300" value="10" style="width:70px" />
+          </div>
+          <div class="footerhint">Viewers type the trigger word in chat to throw a dart!</div>
+        </div>
       </div>
       <div class="gamewrap">
         <canvas id="dartCanvas"></canvas>
@@ -35,6 +55,7 @@
             <span class="res-name" id="resName"></span>
           </div>
         </div>
+        <div id="chatThrower" class="chat-thrower hidden"></div>
       </div>
     </div>
   </div>
